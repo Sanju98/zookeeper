@@ -1368,6 +1368,50 @@ and [SASL authentication for ZooKeeper](https://cwiki.apache.org/confluence/disp
     authenticated client with that principal will be able to bypass
     ACL checking and have full privileges to all znodes.
 
+* *ssl.x509.legacySuperUserCompatibilityEnabled* :
+    (Java system property: **zookeeper.ssl.x509.legacySuperUserCompatibilityEnabled**)
+    **Default: false.** When enabled, both **X509AuthenticationProvider** and
+    **X509ZNodeGroupAclProvider** can match an authenticated SPIFFE v1/wl identity,
+    or a v1/v2 **application/\<mp\>/\<app\>[/\<tag\>]** identity, against an
+    existing formatted legacy service-principal superuser ID by application name. Exact
+    configured client-ID matches take precedence and do not require this option.
+    Supported legacy forms include **servicePrincipal(kafka**,
+    **servicePrincipal(kafka)**, and **urn:li:servicePrincipal(kafka;region1;instance1)**.
+    The existing superuser settings remain **zookeeper.X509AuthenticationProvider.superUser**
+    and **zookeeper.X509ZNodeGroupAclProvider.superUserId**, respectively.
+    The original certificate-derived identity is preserved; the **super** AuthInfo
+    marker uses the matched configured ID so explicit superusers remain distinct
+    from cross-domain components during ACL preparation.
+    This option does not enable reverse legacy-to-SPIFFE superuser aliases or
+    compatibility for user, group, airflow, arbitrary v2, or Subject DN identities.
+    **Warning:** legacy application names do not distinguish products or tags;
+    enable this option only when all eligible trusted identities with that app
+    name should have full superuser privileges. It does not change certificate
+    trust validation or existing cross-domain grants. Treat it as a startup
+    setting and restart servers or reconnect clients when changing it; it is not
+    an immediate revocation mechanism for already authenticated connections.
+
+    URI-domain and direct ACL compatibility does not require this option.
+    That compatibility is one-way: eligible SPIFFE application identities may
+    match formatted legacy service principals, but
+    legacy clients do not acquire reverse aliases.
+    Original client IDs, exact matches and existing mapped-domain grants remain
+    unchanged. Bare names such as **kafka** are not compatibility targets for
+    URI-domain mappings, direct ACLs or superuser selection. For example,
+    **application/example-mp/kafka** does not gain an alias to **kafka**.
+    This does not reject existing exact matches: a v1/wl or legacy SAN identity
+    extracted as **kafka** still matches that exact ID. A client explicitly
+    mapped into domain **kafka** can still match the **x509:kafka** domain ACL.
+
+    Direct ACL matching uses authenticated identity context attached to the request,
+    including writes forwarded by followers or observers. Quorum requests carry this
+    context in a reserved transport-only **zookeeper-internal-x509** entry, removed
+    before authorization; it is not a client authentication scheme or a stored ACL.
+    Both the receiving server and the leader must support this context for forwarded
+    compatibility matches. Missing context does not enable an alias, so do not rely
+    on this compatibility during a mixed-version rollout. Exact IDs and existing
+    domain/superuser AuthInfo continue to use their ordinary authorization rules.
+
 * *zookeeper.superUser* :
     (Java system property: **zookeeper.superUser**)
     Similar to **zookeeper.X509AuthenticationProvider.superUser**
